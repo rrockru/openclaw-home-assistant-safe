@@ -1,0 +1,57 @@
+{
+  "id": "home-assistant-safe",
+  "name": "Home Assistant Safe",
+  "description": "Least-privilege Home Assistant tools with entity-level read/write ACLs and token-file authentication.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["url", "tokenFile"],
+    "properties": {
+      "url": {
+        "type": "string",
+        "description": "Home Assistant base URL, for example http://192.168.1.30:8123"
+      },
+      "tokenFile": {
+        "type": "string",
+        "description": "Path to a file containing a Home Assistant Long-Lived Access Token"
+      },
+      "readableEntities": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": [],
+        "description": "Entity IDs or simple wildcard patterns allowed for reads, e.g. sensor.*"
+      },
+      "writableEntities": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": [],
+        "description": "Entity IDs or simple wildcard patterns allowed for turn_on/turn_off. Empty means read-only."
+      },
+      "blockedEntities": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": [],
+        "description": "Entity IDs or wildcard patterns always denied. Block rules override allow rules."
+      },
+      "requestTimeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 30000,
+        "default": 8000,
+        "description": "HTTP timeout for Home Assistant API calls"
+      }
+    }
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "ha_get_state",
+      "ha_list_entities",
+      "ha_turn_on",
+      "ha_turn_off"
+    ]
+  }
+}

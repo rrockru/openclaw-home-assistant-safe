@@ -1,0 +1,21 @@
+{
+  "name": "openclaw-home-assistant-safe",
+  "version": "0.1.0",
+  "description": "Minimal least-privilege Home Assistant tools for OpenClaw.",
+  "type": "module",
+  "files": [
+    "dist",
+    "src",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "dependencies": {
+    "typebox": "1.1.38"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.5.17"
+  },
+  "openclaw": {
+    "extensions": ["./dist/index.js"]
+  }
+}
