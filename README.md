@@ -77,3 +77,7 @@ For the `home` agent, allow only the four `ha_*` tools you intend to expose and 
 ```
 
 The plugin deliberately rejects a token file that is a symlink or has any group/world permission bits. Use mode `0600`.
+
+## Install-before-config behavior
+
+Version 0.1.1 allows the plugin to be linked before `url` and `tokenFile` are configured. Tool calls fail closed until both values are present.

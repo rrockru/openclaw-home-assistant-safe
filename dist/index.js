@@ -3,13 +3,19 @@ import { Type } from "typebox";
 import { defineToolPlugin } from "openclaw/plugin-sdk/tool-plugin";
 
 const configSchema = Type.Object({
-  url: Type.String({ description: "Home Assistant base URL." }),
-  tokenFile: Type.String({ description: "Path to Home Assistant token file." }),
+  url: Type.Optional(Type.String({ description: "Home Assistant base URL." })),
+  tokenFile: Type.Optional(Type.String({ description: "Path to Home Assistant token file." })),
   readableEntities: Type.Optional(Type.Array(Type.String(), { default: [] })),
   writableEntities: Type.Optional(Type.Array(Type.String(), { default: [] })),
   blockedEntities: Type.Optional(Type.Array(Type.String(), { default: [] })),
   requestTimeoutMs: Type.Optional(Type.Integer({ minimum: 1000, maximum: 30000, default: 8000 })),
 }, { additionalProperties: false });
+
+function requireConfigured(config) {
+  if (!config?.url || !config?.tokenFile) {
+    throw new Error("Home Assistant Safe is not configured: set plugins.entries.home-assistant-safe.config.url and tokenFile");
+  }
+}
 
 function normalizeBaseUrl(url) {
   return url.replace(/\/+$/, "");
@@ -54,6 +60,7 @@ async function loadToken(tokenFile) {
 }
 
 async function haRequest(config, path, options = {}, signal) {
+  requireConfigured(config);
   const parsedUrl = new URL(config.url);
   if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
     throw new Error("Home Assistant url must use http or https");
