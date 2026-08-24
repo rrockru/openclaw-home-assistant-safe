@@ -1,19 +1,36 @@
 {
   "name": "home-assistant-safe",
-  "version": "0.1.1",
-  "description": "Minimal least-privilege Home Assistant tools for OpenClaw.",
+  "version": "0.2.0",
+  "description": "Least-privilege Home Assistant tools for OpenClaw with entity-level ACLs and area-aware discovery.",
   "type": "module",
   "files": [
     "dist",
-    "src",
     "openclaw.plugin.json",
     "README.md"
   ],
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "plugin:build": "npm run build && openclaw plugins build --root . --entry ./dist/index.js",
+    "plugin:validate": "npm run plugin:build && openclaw plugins validate --root . --entry ./dist/index.js",
+    "test": "vitest run",
+    "check": "npm run plugin:validate && npm test",
+    "prepack": "npm run check"
+  },
   "dependencies": {
     "typebox": "1.1.38"
   },
   "peerDependencies": {
     "openclaw": ">=2026.5.17"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "openclaw": "2026.7.1-2",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=24.15.0"
   },
   "openclaw": {
     "extensions": [
