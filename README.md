@@ -60,6 +60,22 @@ install -m 0600 /dev/null /var/lib/openclaw/.openclaw/secrets/home-assistant-tok
 
 Then write the token through your normal secret-management process. Do not put it in `openclaw.json`, source control, shell history, logs, or prompts.
 
+## Install from npm
+
+After reviewing the release and its changelog, install the public scoped package directly from npm:
+
+```bash
+openclaw plugins install npm:@rrock/home-assistant-safe
+```
+
+For reproducible production deployments, pin an exact reviewed version, for example `npm:@rrock/home-assistant-safe@0.2.0`. Restart the Gateway after installation, then inspect the effective runtime registration:
+
+```bash
+openclaw plugins inspect home-assistant-safe --runtime --json
+```
+
+The npm package name is scoped, but the OpenClaw plugin ID remains `home-assistant-safe`.
+
 ## Install from a local path
 
 On a development machine:

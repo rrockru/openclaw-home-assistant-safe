@@ -26,6 +26,7 @@ All notable changes to this project are documented here. The project follows Sem
 ### Changed
 
 - Build output no longer includes source maps or declaration maps.
+- The public npm package is published under the `@rrock/home-assistant-safe` scope; the OpenClaw plugin ID remains `home-assistant-safe`.
 - The source/build workflow is authoritative: `plugin:build` regenerates OpenClaw metadata, while CI checks generated metadata and committed `dist/` without rewriting it.
 - Production path deployments explicitly require `npm ci --omit=dev --ignore-scripts` even though committed `dist/` removes the need for build tooling.
 

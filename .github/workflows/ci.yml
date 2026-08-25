@@ -3,6 +3,8 @@ name: CI
 on:
   push:
   pull_request:
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -31,3 +33,33 @@ jobs:
       - name: Verify committed build output
         run: git diff --exit-code -- dist openclaw.plugin.json package.json
       - run: npm pack --dry-run --ignore-scripts
+
+  publish:
+    if: github.event_name == 'release' && github.event.action == 'published'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+          registry-url: https://registry.npmjs.org
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Verify npm scope and release tag
+        run: >-
+          node -e "const { name, version } = require('./package.json');
+          if (name !== '@rrock/home-assistant-safe') {
+            console.error('Package must publish as @rrock/home-assistant-safe');
+            process.exit(1);
+          }
+          const expected = 'v' + version;
+          if (process.env.GITHUB_REF_NAME !== expected) {
+            console.error('Release tag must be ' + expected);
+            process.exit(1);
+          }"
+      - name: Publish package to npm
+        run: npm publish --access public

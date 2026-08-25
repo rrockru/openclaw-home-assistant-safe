@@ -1,5 +1,5 @@
 {
-  "name": "home-assistant-safe",
+  "name": "@rrock/home-assistant-safe",
   "version": "0.2.0",
   "description": "Least-privilege Home Assistant tools for OpenClaw with entity-level ACLs and area-aware discovery.",
   "keywords": [
