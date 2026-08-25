@@ -1,5 +1,8 @@
 import { normalizeBaseUrl, requireConfigured } from "../config.js";
 import { loadToken } from "../security.js";
+import { parseState, parseStates } from "./response-validation.js";
+const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
+const MAX_ERROR_DETAIL_LENGTH = 2_000;
 function linkedAbortController(signal, timeoutMs) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(new Error("Home Assistant request timed out")), timeoutMs);
@@ -19,6 +22,39 @@ function linkedAbortController(signal, timeoutMs) {
         },
     };
 }
+async function readResponseText(response) {
+    const declaredLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
+        throw new Error("Home Assistant API response exceeded the 16 MiB limit");
+    }
+    if (!response.body)
+        return "";
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let total = 0;
+    let text = "";
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done)
+                break;
+            total += value.byteLength;
+            if (total > MAX_RESPONSE_BYTES) {
+                await reader.cancel();
+                throw new Error("Home Assistant API response exceeded the 16 MiB limit");
+            }
+            text += decoder.decode(value, { stream: true });
+        }
+        return text + decoder.decode();
+    }
+    finally {
+        reader.releaseLock();
+    }
+}
+function errorDetail(body) {
+    const detail = typeof body === "string" ? body : JSON.stringify(body);
+    return detail.length <= MAX_ERROR_DETAIL_LENGTH ? detail : `${detail.slice(0, MAX_ERROR_DETAIL_LENGTH)}…`;
+}
 export async function haRequest(config, path, options = {}, signal) {
     requireConfigured(config);
     signal?.throwIfAborted();
@@ -27,16 +63,23 @@ export async function haRequest(config, path, options = {}, signal) {
     const timeoutMs = config.requestTimeoutMs ?? 8000;
     const { controller, cleanup } = linkedAbortController(signal, timeoutMs);
     try {
-        const response = await fetch(`${normalizeBaseUrl(config.url)}${path}`, {
-            ...options,
-            signal: controller.signal,
-            headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-                ...(options.headers ?? {}),
-            },
-        });
-        const text = await response.text();
+        let response;
+        try {
+            const headers = new Headers(options.headers);
+            headers.set("Authorization", `Bearer ${token}`);
+            headers.set("Content-Type", "application/json");
+            response = await fetch(`${normalizeBaseUrl(config.url)}${path}`, {
+                ...options,
+                signal: controller.signal,
+                headers,
+            });
+        }
+        catch (error) {
+            if (controller.signal.aborted)
+                throw controller.signal.reason ?? error;
+            throw new Error("Home Assistant API request failed", { cause: error });
+        }
+        const text = await readResponseText(response);
         let body = null;
         if (text) {
             try {
@@ -47,8 +90,7 @@ export async function haRequest(config, path, options = {}, signal) {
             }
         }
         if (!response.ok) {
-            const detail = typeof body === "string" ? body : JSON.stringify(body);
-            throw new Error(`Home Assistant API ${response.status}: ${detail}`);
+            throw new Error(`Home Assistant API ${response.status}: ${errorDetail(body)}`);
         }
         return body;
     }
@@ -57,9 +99,8 @@ export async function haRequest(config, path, options = {}, signal) {
     }
 }
 export function listStates(config, signal) {
-    return haRequest(config, "/api/states", {}, signal);
+    return haRequest(config, "/api/states", {}, signal).then(parseStates);
 }
 export function readState(config, entityId, signal) {
-    return haRequest(config, `/api/states/${encodeURIComponent(entityId)}`, {}, signal);
+    return haRequest(config, `/api/states/${encodeURIComponent(entityId)}`, {}, signal).then(parseState);
 }
-//# sourceMappingURL=rest-client.js.map

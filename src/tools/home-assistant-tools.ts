@@ -1,10 +1,16 @@
 import { Type } from "typebox";
 import type { DefineToolPluginOptions } from "openclaw/plugin-sdk/tool-plugin";
-import { configSchema } from "../config.js";
+import type { configSchema } from "../config.js";
 import { filterAndEnrichStates } from "../home-assistant/entities.js";
 import { getRegistrySnapshot } from "../home-assistant/registry.js";
 import { listStates } from "../home-assistant/rest-client.js";
 import { callPowerService, getState } from "../home-assistant/state.js";
+import { HOME_ASSISTANT_ENTITY_ID_PATTERN } from "../security.js";
+
+const entityIdSchema = Type.String({
+  pattern: HOME_ASSISTANT_ENTITY_ID_PATTERN,
+  description: "One canonical lowercase Home Assistant entity_id.",
+});
 
 export const homeAssistantTools: DefineToolPluginOptions<typeof configSchema>["tools"] = (tool) => {
   return [
@@ -12,10 +18,7 @@ export const homeAssistantTools: DefineToolPluginOptions<typeof configSchema>["t
       name: "ha_get_state",
       label: "Home Assistant Get State",
       description: "Read the current state of one explicitly allowed Home Assistant entity.",
-      parameters: Type.Object(
-        { entity_id: Type.String({ description: "Exact Home Assistant entity_id." }) },
-        { additionalProperties: false },
-      ),
+      parameters: Type.Object({ entity_id: entityIdSchema }, { additionalProperties: false }),
       async execute({ entity_id }, config, context) {
         context.signal?.throwIfAborted();
         return await getState(config, entity_id, context.signal);
@@ -28,7 +31,9 @@ export const homeAssistantTools: DefineToolPluginOptions<typeof configSchema>["t
         "List readable Home Assistant entities, enriched with device and area metadata. Filter by domain, device class, and area to minimize returned data.",
       parameters: Type.Object(
         {
-          domain: Type.Optional(Type.String({ description: "Exact Home Assistant domain, for example sensor or light." })),
+          domain: Type.Optional(
+            Type.String({ description: "Exact Home Assistant domain, for example sensor or light." }),
+          ),
           deviceClass: Type.Optional(
             Type.String({ description: "Exact device_class, for example temperature, humidity, or battery." }),
           ),
@@ -56,10 +61,7 @@ export const homeAssistantTools: DefineToolPluginOptions<typeof configSchema>["t
       name: "ha_turn_on",
       label: "Home Assistant Turn On",
       description: "Turn on one explicitly writable Home Assistant entity. Fails closed outside the write ACL.",
-      parameters: Type.Object(
-        { entity_id: Type.String({ description: "Exact Home Assistant entity_id." }) },
-        { additionalProperties: false },
-      ),
+      parameters: Type.Object({ entity_id: entityIdSchema }, { additionalProperties: false }),
       async execute({ entity_id }, config, context) {
         context.signal?.throwIfAborted();
         return await callPowerService(config, entity_id, "turn_on", context.signal);
@@ -69,10 +71,7 @@ export const homeAssistantTools: DefineToolPluginOptions<typeof configSchema>["t
       name: "ha_turn_off",
       label: "Home Assistant Turn Off",
       description: "Turn off one explicitly writable Home Assistant entity. Fails closed outside the write ACL.",
-      parameters: Type.Object(
-        { entity_id: Type.String({ description: "Exact Home Assistant entity_id." }) },
-        { additionalProperties: false },
-      ),
+      parameters: Type.Object({ entity_id: entityIdSchema }, { additionalProperties: false }),
       async execute({ entity_id }, config, context) {
         context.signal?.throwIfAborted();
         return await callPowerService(config, entity_id, "turn_off", context.signal);

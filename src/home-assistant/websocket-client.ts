@@ -16,11 +16,15 @@ interface HaWsCommand {
   [key: string]: unknown;
 }
 
-export async function haWebSocketCommands<T extends readonly unknown[]>(
+function errorReason(reason: unknown, fallback: string): Error {
+  return reason instanceof Error ? reason : new Error(fallback);
+}
+
+export async function haWebSocketCommands(
   config: PluginConfig,
   commands: readonly HaWsCommand[],
   signal?: AbortSignal,
-): Promise<T> {
+): Promise<unknown[]> {
   requireConfigured(config);
   signal?.throwIfAborted();
 
@@ -29,7 +33,7 @@ export async function haWebSocketCommands<T extends readonly unknown[]>(
 
   const timeoutMs = config.requestTimeoutMs ?? 8000;
 
-  return await new Promise<T>((resolve, reject) => {
+  return await new Promise<unknown[]>((resolve, reject) => {
     const socket = new WebSocket(webSocketUrl(config.url));
     const results: unknown[] = new Array(commands.length);
     const received = new Array<boolean>(commands.length).fill(false);
@@ -51,8 +55,8 @@ export async function haWebSocketCommands<T extends readonly unknown[]>(
       } catch {
         // Best effort only.
       }
-      if (error !== undefined) reject(error);
-      else resolve(results as unknown as T);
+      if (error !== undefined) reject(errorReason(error, "Home Assistant WebSocket request failed"));
+      else resolve(results);
     };
 
     const timer = setTimeout(() => finish(new Error("Home Assistant WebSocket request timed out")), timeoutMs);
@@ -63,8 +67,8 @@ export async function haWebSocketCommands<T extends readonly unknown[]>(
         finish(
           new Error(
             authenticated
-            ? "Home Assistant WebSocket connection closed before all responses arrived"
-            : "Home Assistant WebSocket connection closed before authentication completed",
+              ? "Home Assistant WebSocket connection closed before all responses arrived"
+              : "Home Assistant WebSocket connection closed before authentication completed",
           ),
         );
       }
@@ -93,7 +97,9 @@ export async function haWebSocketCommands<T extends readonly unknown[]>(
           return;
         }
         if (message.type === "auth_invalid") {
-          finish(new Error(`Home Assistant WebSocket authentication failed${message.message ? `: ${message.message}` : ""}`));
+          finish(
+            new Error(`Home Assistant WebSocket authentication failed${message.message ? `: ${message.message}` : ""}`),
+          );
           return;
         }
         if (message.type !== "auth_ok") return;

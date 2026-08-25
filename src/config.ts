@@ -4,7 +4,9 @@ import type { PluginConfig } from "./types.js";
 export const configSchema = Type.Object(
   {
     url: Type.Optional(Type.String({ description: "Home Assistant base URL, for example http://192.168.1.30:8123." })),
-    tokenFile: Type.Optional(Type.String({ description: "Path to a file containing a Home Assistant Long-Lived Access Token." })),
+    tokenFile: Type.Optional(
+      Type.String({ description: "Path to a file containing a Home Assistant Long-Lived Access Token." }),
+    ),
     readableEntities: Type.Optional(
       Type.Array(Type.String(), {
         default: [],
@@ -43,7 +45,9 @@ export const configSchema = Type.Object(
   { additionalProperties: false },
 );
 
-export function requireConfigured(config: PluginConfig): asserts config is PluginConfig & { url: string; tokenFile: string } {
+export function requireConfigured(
+  config: PluginConfig,
+): asserts config is PluginConfig & { url: string; tokenFile: string } {
   if (!config?.url || !config?.tokenFile) {
     throw new Error(
       "Home Assistant Safe is not configured: set plugins.entries.home-assistant-safe.config.url and tokenFile",

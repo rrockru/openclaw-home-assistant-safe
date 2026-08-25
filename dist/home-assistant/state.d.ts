@@ -18,4 +18,3 @@ export declare function callPowerService(config: PluginConfig, entityId: string,
         last_updated: string | undefined;
     } | null;
 }>;
-//# sourceMappingURL=state.d.ts.map

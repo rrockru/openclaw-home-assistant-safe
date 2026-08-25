@@ -26,6 +26,10 @@ class FakeWebSocket extends EventTarget {
   message(message: unknown): void {
     this.dispatchEvent(new MessageEvent("message", { data: JSON.stringify(message) }));
   }
+
+  rawMessage(data: string): void {
+    this.dispatchEvent(new MessageEvent("message", { data }));
+  }
 }
 
 let testDir: string;
@@ -52,10 +56,9 @@ describe("Home Assistant WebSocket client", () => {
   });
 
   it("tracks an undefined command result as received", async () => {
-    const resultPromise = haWebSocketCommands<[undefined]>(
-      { url: "http://home-assistant.local:8123", tokenFile },
-      [{ type: "test/command" }],
-    );
+    const resultPromise = haWebSocketCommands({ url: "http://home-assistant.local:8123", tokenFile }, [
+      { type: "test/command" },
+    ]);
     const socket = await latestSocket();
 
     socket.message({ type: "auth_required" });
@@ -67,7 +70,7 @@ describe("Home Assistant WebSocket client", () => {
   });
 
   it("rejects immediately when the socket closes before authentication", async () => {
-    const resultPromise = haWebSocketCommands<[]>(
+    const resultPromise = haWebSocketCommands(
       { url: "http://home-assistant.local:8123", tokenFile, requestTimeoutMs: 30_000 },
       [],
     );
@@ -80,10 +83,9 @@ describe("Home Assistant WebSocket client", () => {
   });
 
   it("owns command ids even if a caller supplies an id field", async () => {
-    const resultPromise = haWebSocketCommands<[string]>(
-      { url: "http://home-assistant.local:8123", tokenFile },
-      [{ type: "test/command", id: 99 }],
-    );
+    const resultPromise = haWebSocketCommands({ url: "http://home-assistant.local:8123", tokenFile }, [
+      { type: "test/command", id: 99 },
+    ]);
     const socket = await latestSocket();
 
     socket.message({ type: "auth_required" });
@@ -92,5 +94,48 @@ describe("Home Assistant WebSocket client", () => {
     expect(JSON.parse(socket.sent[1]!)).toMatchObject({ type: "test/command", id: 1 });
     socket.message({ id: 1, type: "result", success: true, result: "ok" });
     await expect(resultPromise).resolves.toEqual(["ok"]);
+  });
+
+  it("rejects authentication and command failures", async () => {
+    const authPromise = haWebSocketCommands({ url: "http://home-assistant.local:8123", tokenFile }, [
+      { type: "test/command" },
+    ]);
+    const authSocket = await latestSocket();
+    authSocket.message({ type: "auth_invalid", message: "bad token" });
+    await expect(authPromise).rejects.toThrow("authentication failed: bad token");
+
+    FakeWebSocket.instances = [];
+    const commandPromise = haWebSocketCommands({ url: "http://home-assistant.local:8123", tokenFile }, [
+      { type: "test/command" },
+    ]);
+    const commandSocket = await latestSocket();
+    commandSocket.message({ type: "auth_required" });
+    commandSocket.message({ type: "auth_ok" });
+    commandSocket.message({ id: 1, type: "result", success: false, error: { message: "denied" } });
+    await expect(commandPromise).rejects.toThrow("command failed: denied");
+  });
+
+  it("rejects invalid JSON and closes the connection", async () => {
+    const resultPromise = haWebSocketCommands({ url: "http://home-assistant.local:8123", tokenFile }, [
+      { type: "test/command" },
+    ]);
+    const socket = await latestSocket();
+    socket.rawMessage("not-json");
+    await expect(resultPromise).rejects.toThrow("returned invalid JSON");
+    expect(socket.closed).toBe(true);
+  });
+
+  it("times out and closes an unresponsive connection", async () => {
+    vi.useFakeTimers();
+    const resultPromise = haWebSocketCommands(
+      { url: "http://home-assistant.local:8123", tokenFile, requestTimeoutMs: 1_000 },
+      [{ type: "test/command" }],
+    );
+    const socket = await latestSocket();
+    const expectation = expect(resultPromise).rejects.toThrow("request timed out");
+    await vi.advanceTimersByTimeAsync(1_000);
+    await expectation;
+    expect(socket.closed).toBe(true);
+    vi.useRealTimers();
   });
 });

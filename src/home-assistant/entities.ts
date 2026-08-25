@@ -51,10 +51,7 @@ function resolveEffectiveAreaId(
   return entity?.area_id ?? device?.area_id ?? null;
 }
 
-function resolveEntityContext(
-  entityId: string,
-  registry: RegistrySnapshot,
-): ResolvedEntityContext {
+function resolveEntityContext(entityId: string, registry: RegistrySnapshot): ResolvedEntityContext {
   const entity = registry.entities.get(entityId);
   const device = entity?.device_id ? registry.devices.get(entity.device_id) : undefined;
   const effectiveAreaId = resolveEffectiveAreaId(entity, device);
@@ -67,19 +64,16 @@ function resolveEntityContext(
   };
 }
 
-function matchingAreaIds(
-  registry: RegistrySnapshot,
-  query: string | undefined,
-): ReadonlySet<string> | undefined {
+function matchingAreaIds(registry: RegistrySnapshot, query: string | undefined): ReadonlySet<string> | undefined {
   if (query === undefined || query.length === 0) return undefined;
 
   const needle = normalize(query);
   const matchingIds = new Set<string>();
   for (const area of registry.areas.values()) {
     if (
-      normalize(area.area_id) === needle
-      || normalize(area.name) === needle
-      || (area.aliases ?? []).some((alias) => normalize(alias) === needle)
+      normalize(area.area_id) === needle ||
+      normalize(area.name) === needle ||
+      (area.aliases ?? []).some((alias) => normalize(alias) === needle)
     ) {
       matchingIds.add(area.area_id);
     }

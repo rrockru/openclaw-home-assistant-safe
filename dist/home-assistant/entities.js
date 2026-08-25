@@ -26,9 +26,9 @@ function matchingAreaIds(registry, query) {
     const needle = normalize(query);
     const matchingIds = new Set();
     for (const area of registry.areas.values()) {
-        if (normalize(area.area_id) === needle
-            || normalize(area.name) === needle
-            || (area.aliases ?? []).some((alias) => normalize(alias) === needle)) {
+        if (normalize(area.area_id) === needle ||
+            normalize(area.name) === needle ||
+            (area.aliases ?? []).some((alias) => normalize(alias) === needle)) {
             matchingIds.add(area.area_id);
         }
     }
@@ -80,4 +80,3 @@ export function filterAndEnrichStates(states, config, registry, filters) {
         entities,
     };
 }
-//# sourceMappingURL=entities.js.map

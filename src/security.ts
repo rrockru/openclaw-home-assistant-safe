@@ -1,10 +1,21 @@
-import { lstat, readFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { open } from "node:fs/promises";
 import type { PluginConfig } from "./types.js";
 
 export interface EntityAccessPolicy {
   canRead(entityId: string): boolean;
   canWrite(entityId: string): boolean;
   isBlocked(entityId: string): boolean;
+}
+
+export const HOME_ASSISTANT_ENTITY_ID_PATTERN = "^[a-z0-9_]+\\.[a-z0-9_]+$";
+const ENTITY_ID_PATTERN = new RegExp(HOME_ASSISTANT_ENTITY_ID_PATTERN);
+
+export function requireCanonicalEntityId(entityId: string): string {
+  if (!ENTITY_ID_PATTERN.test(entityId)) {
+    throw new Error("Invalid Home Assistant entity_id: expected one lowercase domain.object_id value");
+  }
+  return entityId;
 }
 
 type PatternMatcher = (entityId: string) => boolean;
@@ -66,16 +77,29 @@ export function canWrite(config: PluginConfig, entityId: string): boolean {
 }
 
 export async function loadToken(tokenFile: string): Promise<string> {
-  const info = await lstat(tokenFile);
-  if (!info.isFile() || info.isSymbolicLink()) {
-    throw new Error("Home Assistant tokenFile must be a regular non-symlink file");
+  let handle;
+  try {
+    handle = await open(tokenFile, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ELOOP") {
+      throw new Error("Home Assistant tokenFile must be a regular non-symlink file", { cause: error });
+    }
+    throw error;
   }
 
-  if ((info.mode & 0o077) !== 0) {
-    throw new Error("Home Assistant tokenFile permissions are too broad; require mode 0600 or stricter");
-  }
+  try {
+    const info = await handle.stat();
+    if (!info.isFile()) {
+      throw new Error("Home Assistant tokenFile must be a regular non-symlink file");
+    }
+    if ((info.mode & 0o077) !== 0) {
+      throw new Error("Home Assistant tokenFile permissions are too broad; require mode 0600 or stricter");
+    }
 
-  const token = (await readFile(tokenFile, "utf8")).trim();
-  if (!token) throw new Error("Home Assistant token file is empty");
-  return token;
+    const token = (await handle.readFile("utf8")).trim();
+    if (!token) throw new Error("Home Assistant token file is empty");
+    return token;
+  } finally {
+    await handle.close();
+  }
 }

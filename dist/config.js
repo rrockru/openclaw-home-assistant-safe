@@ -48,4 +48,3 @@ export function webSocketUrl(url) {
     parsed.pathname = `${parsed.pathname.replace(/\/+$/, "")}/api/websocket`;
     return parsed.toString();
 }
-//# sourceMappingURL=config.js.map

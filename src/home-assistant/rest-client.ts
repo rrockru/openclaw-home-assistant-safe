@@ -1,8 +1,15 @@
 import { normalizeBaseUrl, requireConfigured } from "../config.js";
 import { loadToken } from "../security.js";
 import type { HomeAssistantState, PluginConfig } from "../types.js";
+import { parseState, parseStates } from "./response-validation.js";
 
-function linkedAbortController(signal: AbortSignal | undefined, timeoutMs: number): {
+const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
+const MAX_ERROR_DETAIL_LENGTH = 2_000;
+
+function linkedAbortController(
+  signal: AbortSignal | undefined,
+  timeoutMs: number,
+): {
   controller: AbortController;
   cleanup: () => void;
 } {
@@ -24,12 +31,45 @@ function linkedAbortController(signal: AbortSignal | undefined, timeoutMs: numbe
   };
 }
 
-export async function haRequest<T>(
+async function readResponseText(response: Response): Promise<string> {
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
+    throw new Error("Home Assistant API response exceeded the 16 MiB limit");
+  }
+  if (!response.body) return "";
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let text = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_RESPONSE_BYTES) {
+        await reader.cancel();
+        throw new Error("Home Assistant API response exceeded the 16 MiB limit");
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    return text + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function errorDetail(body: unknown): string {
+  const detail = typeof body === "string" ? body : JSON.stringify(body);
+  return detail.length <= MAX_ERROR_DETAIL_LENGTH ? detail : `${detail.slice(0, MAX_ERROR_DETAIL_LENGTH)}…`;
+}
+
+export async function haRequest(
   config: PluginConfig,
   path: string,
   options: RequestInit = {},
   signal?: AbortSignal,
-): Promise<T> {
+): Promise<unknown> {
   requireConfigured(config);
   signal?.throwIfAborted();
 
@@ -39,17 +79,22 @@ export async function haRequest<T>(
   const { controller, cleanup } = linkedAbortController(signal, timeoutMs);
 
   try {
-    const response = await fetch(`${normalizeBaseUrl(config.url)}${path}`, {
-      ...options,
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        ...(options.headers ?? {}),
-      },
-    });
+    let response: Response;
+    try {
+      const headers = new Headers(options.headers);
+      headers.set("Authorization", `Bearer ${token}`);
+      headers.set("Content-Type", "application/json");
+      response = await fetch(`${normalizeBaseUrl(config.url)}${path}`, {
+        ...options,
+        signal: controller.signal,
+        headers,
+      });
+    } catch (error) {
+      if (controller.signal.aborted) throw controller.signal.reason ?? error;
+      throw new Error("Home Assistant API request failed", { cause: error });
+    }
 
-    const text = await response.text();
+    const text = await readResponseText(response);
     let body: unknown = null;
     if (text) {
       try {
@@ -60,20 +105,19 @@ export async function haRequest<T>(
     }
 
     if (!response.ok) {
-      const detail = typeof body === "string" ? body : JSON.stringify(body);
-      throw new Error(`Home Assistant API ${response.status}: ${detail}`);
+      throw new Error(`Home Assistant API ${response.status}: ${errorDetail(body)}`);
     }
 
-    return body as T;
+    return body;
   } finally {
     cleanup();
   }
 }
 
 export function listStates(config: PluginConfig, signal?: AbortSignal): Promise<HomeAssistantState[]> {
-  return haRequest<HomeAssistantState[]>(config, "/api/states", {}, signal);
+  return haRequest(config, "/api/states", {}, signal).then(parseStates);
 }
 
 export function readState(config: PluginConfig, entityId: string, signal?: AbortSignal): Promise<HomeAssistantState> {
-  return haRequest<HomeAssistantState>(config, `/api/states/${encodeURIComponent(entityId)}`, {}, signal);
+  return haRequest(config, `/api/states/${encodeURIComponent(entityId)}`, {}, signal).then(parseState);
 }

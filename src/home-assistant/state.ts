@@ -1,4 +1,4 @@
-import { canRead, canWrite } from "../security.js";
+import { canRead, canWrite, requireCanonicalEntityId } from "../security.js";
 import type { HomeAssistantState, PluginConfig } from "../types.js";
 import { haRequest, readState } from "./rest-client.js";
 
@@ -13,8 +13,9 @@ function slimState(state: HomeAssistantState) {
 }
 
 export async function getState(config: PluginConfig, entityId: string, signal?: AbortSignal) {
-  if (!canRead(config, entityId)) throw new Error(`Read access denied for entity: ${entityId}`);
-  return slimState(await readState(config, entityId, signal));
+  const canonicalEntityId = requireCanonicalEntityId(entityId);
+  if (!canRead(config, canonicalEntityId)) throw new Error("Read access denied for entity");
+  return slimState(await readState(config, canonicalEntityId, signal));
 }
 
 export async function callPowerService(
@@ -23,25 +24,24 @@ export async function callPowerService(
   service: "turn_on" | "turn_off",
   signal?: AbortSignal,
 ) {
-  if (!canWrite(config, entityId)) throw new Error(`Write access denied for entity: ${entityId}`);
+  const canonicalEntityId = requireCanonicalEntityId(entityId);
+  if (!canWrite(config, canonicalEntityId)) throw new Error("Write access denied for entity");
 
-  const separator = entityId.indexOf(".");
-  if (separator <= 0 || separator === entityId.length - 1) throw new Error("Invalid Home Assistant entity_id");
-  const domain = entityId.slice(0, separator);
+  const domain = canonicalEntityId.slice(0, canonicalEntityId.indexOf("."));
 
   await haRequest(
     config,
     `/api/services/${encodeURIComponent(domain)}/${service}`,
-    { method: "POST", body: JSON.stringify({ entity_id: entityId }) },
+    { method: "POST", body: JSON.stringify({ entity_id: canonicalEntityId }) },
     signal,
   );
 
   let resultingState = null;
   try {
-    if (canRead(config, entityId)) resultingState = await getState(config, entityId, signal);
+    if (canRead(config, canonicalEntityId)) resultingState = await getState(config, canonicalEntityId, signal);
   } catch {
     // The state read is best-effort only after a successful service call.
   }
 
-  return { ok: true, entity_id: entityId, service, resulting_state: resultingState };
+  return { ok: true, entity_id: canonicalEntityId, service, resulting_state: resultingState };
 }

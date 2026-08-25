@@ -3,6 +3,5 @@ interface HaWsCommand {
     type: string;
     [key: string]: unknown;
 }
-export declare function haWebSocketCommands<T extends readonly unknown[]>(config: PluginConfig, commands: readonly HaWsCommand[], signal?: AbortSignal): Promise<T>;
+export declare function haWebSocketCommands(config: PluginConfig, commands: readonly HaWsCommand[], signal?: AbortSignal): Promise<unknown[]>;
 export {};
-//# sourceMappingURL=websocket-client.d.ts.map

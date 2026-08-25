@@ -12,14 +12,16 @@ import { haWebSocketCommands } from "../src/home-assistant/websocket-client.js";
 describe("Home Assistant WebSocket abort handling", () => {
   it("rechecks cancellation after asynchronous token loading", async () => {
     let resolveToken!: (token: string) => void;
-    loadToken.mockReturnValueOnce(new Promise<string>((resolve) => {
-      resolveToken = resolve;
-    }));
+    loadToken.mockReturnValueOnce(
+      new Promise<string>((resolve) => {
+        resolveToken = resolve;
+      }),
+    );
 
     const webSocketConstructor = vi.fn();
     vi.stubGlobal("WebSocket", webSocketConstructor);
     const controller = new AbortController();
-    const result = haWebSocketCommands<[]>(
+    const result = haWebSocketCommands(
       { url: "http://home-assistant.local:8123", tokenFile: "/run/secrets/token" },
       [],
       controller.signal,

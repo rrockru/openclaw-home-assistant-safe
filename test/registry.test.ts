@@ -57,9 +57,11 @@ describe("registry cache", () => {
     vi.setSystemTime(1_000);
 
     let resolveRefresh!: (value: typeof rawSnapshot) => void;
-    haWebSocketCommands.mockReturnValueOnce(new Promise<typeof rawSnapshot>((resolve) => {
-      resolveRefresh = resolve;
-    }));
+    haWebSocketCommands.mockReturnValueOnce(
+      new Promise<typeof rawSnapshot>((resolve) => {
+        resolveRefresh = resolve;
+      }),
+    );
 
     const first = getRegistrySnapshot(config);
     vi.setSystemTime(10_000);
@@ -77,12 +79,51 @@ describe("registry cache", () => {
   });
 
   it("does not cache failed refreshes", async () => {
-    haWebSocketCommands
-      .mockRejectedValueOnce(new Error("registry unavailable"))
-      .mockResolvedValueOnce(rawSnapshot);
+    haWebSocketCommands.mockRejectedValueOnce(new Error("registry unavailable")).mockResolvedValueOnce(rawSnapshot);
 
     await expect(getRegistrySnapshot(config)).rejects.toThrow("registry unavailable");
     await expect(getRegistrySnapshot(config)).resolves.toMatchObject({ entities: expect.any(Map) });
     expect(haWebSocketCommands).toHaveBeenCalledTimes(2);
+  });
+
+  it("applies each caller's TTL to the cached completion time", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    haWebSocketCommands.mockResolvedValue(rawSnapshot);
+
+    await getRegistrySnapshot({ ...config, registryCacheTtlMs: 10_000 });
+    vi.setSystemTime(1_600);
+    await getRegistrySnapshot({ ...config, registryCacheTtlMs: 500 });
+
+    expect(haWebSocketCommands).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects malformed registry responses without caching them", async () => {
+    haWebSocketCommands.mockResolvedValueOnce([[{ entity_id: 4 }], [], []]).mockResolvedValueOnce(rawSnapshot);
+
+    await expect(getRegistrySnapshot(config)).rejects.toThrow("missing string entity_id");
+    await expect(getRegistrySnapshot(config)).resolves.toMatchObject({ entities: expect.any(Map) });
+    expect(haWebSocketCommands).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retain snapshots when caching is disabled", async () => {
+    haWebSocketCommands.mockResolvedValue(rawSnapshot);
+    const uncachedConfig = { ...config, registryCacheTtlMs: 0 };
+
+    await getRegistrySnapshot(uncachedConfig);
+    await getRegistrySnapshot(uncachedConfig);
+
+    expect(haWebSocketCommands).toHaveBeenCalledTimes(2);
+  });
+
+  it("bounds registry snapshots across configured instances", async () => {
+    haWebSocketCommands.mockResolvedValue(rawSnapshot);
+
+    for (let index = 0; index < 17; index += 1) {
+      await getRegistrySnapshot({ ...config, tokenFile: `/run/secrets/token-${index}` });
+    }
+    await getRegistrySnapshot({ ...config, tokenFile: "/run/secrets/token-0" });
+
+    expect(haWebSocketCommands).toHaveBeenCalledTimes(18);
   });
 });

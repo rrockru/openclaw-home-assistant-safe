@@ -59,11 +59,6 @@
     "onStartup": true
   },
   "contracts": {
-    "tools": [
-      "ha_get_state",
-      "ha_list_entities",
-      "ha_turn_on",
-      "ha_turn_off"
-    ]
+    "tools": ["ha_get_state", "ha_list_entities", "ha_turn_on", "ha_turn_off"]
   }
 }

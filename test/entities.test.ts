@@ -4,10 +4,7 @@ import type { RegistrySnapshot } from "../src/types.js";
 
 const registry: RegistrySnapshot = {
   entities: new Map([
-    [
-      "sensor.living_temperature",
-      { entity_id: "sensor.living_temperature", device_id: "dev-living", area_id: null },
-    ],
+    ["sensor.living_temperature", { entity_id: "sensor.living_temperature", device_id: "dev-living", area_id: null }],
     [
       "sensor.override_temperature",
       { entity_id: "sensor.override_temperature", device_id: "dev-bedroom", area_id: "living_room" },
@@ -47,63 +44,60 @@ const config = {
 };
 
 describe("entity discovery", () => {
-  it.each(["gostinaia", "Гостиная", "ГОСТИНАЯ"])(
-    "resolves the production device-owned area topology by %s",
-    (area) => {
-      const productionRegistry: RegistrySnapshot = {
-        areas: new Map([["gostinaia", { area_id: "gostinaia", name: "Гостиная" }]]),
-        devices: new Map([
-          [
-            "cf3fe902afc641bc3841526d92c57175",
-            {
-              id: "cf3fe902afc641bc3841526d92c57175",
-              area_id: "gostinaia",
-              name: "Термометр",
-            },
-          ],
-        ]),
-        entities: new Map([
-          [
-            "sensor.a4_c1_38_85_3b_46_3b46_temperature",
-            {
-              entity_id: "sensor.a4_c1_38_85_3b_46_3b46_temperature",
-              device_id: "cf3fe902afc641bc3841526d92c57175",
-              area_id: null,
-            },
-          ],
-        ]),
-      };
-      const productionStates = [
-        {
-          entity_id: "sensor.a4_c1_38_85_3b_46_3b46_temperature",
-          state: "25.59",
-          attributes: {
-            friendly_name: "Температура",
-            device_class: "temperature",
-            unit_of_measurement: "°C",
+  it.each(["gostinaia", "Гостиная", "ГОСТИНАЯ"])("resolves the production device-owned area topology by %s", (area) => {
+    const productionRegistry: RegistrySnapshot = {
+      areas: new Map([["gostinaia", { area_id: "gostinaia", name: "Гостиная" }]]),
+      devices: new Map([
+        [
+          "cf3fe902afc641bc3841526d92c57175",
+          {
+            id: "cf3fe902afc641bc3841526d92c57175",
+            area_id: "gostinaia",
+            name: "Термометр",
           },
+        ],
+      ]),
+      entities: new Map([
+        [
+          "sensor.a4_c1_38_85_3b_46_3b46_temperature",
+          {
+            entity_id: "sensor.a4_c1_38_85_3b_46_3b46_temperature",
+            device_id: "cf3fe902afc641bc3841526d92c57175",
+            area_id: null,
+          },
+        ],
+      ]),
+    };
+    const productionStates = [
+      {
+        entity_id: "sensor.a4_c1_38_85_3b_46_3b46_temperature",
+        state: "25.59",
+        attributes: {
+          friendly_name: "Температура",
+          device_class: "temperature",
+          unit_of_measurement: "°C",
         },
-      ];
+      },
+    ];
 
-      const result = filterAndEnrichStates(
-        productionStates,
-        { readableEntities: ["sensor.*"] },
-        productionRegistry,
-        { domain: "sensor", deviceClass: "temperature", area, limit: 50 },
-      );
+    const result = filterAndEnrichStates(productionStates, { readableEntities: ["sensor.*"] }, productionRegistry, {
+      domain: "sensor",
+      deviceClass: "temperature",
+      area,
+      limit: 50,
+    });
 
-      expect(result).toMatchObject({ count: 1, matched: 1, truncated: false });
-      expect(result.entities).toEqual([
-        expect.objectContaining({
-          entity_id: "sensor.a4_c1_38_85_3b_46_3b46_temperature",
-          device_id: "cf3fe902afc641bc3841526d92c57175",
-          device_name: "Термометр",
-          area_id: "gostinaia",
-          area_name: "Гостиная",
-        }),
-      ]);
-    },
-  );
+    expect(result).toMatchObject({ count: 1, matched: 1, truncated: false });
+    expect(result.entities).toEqual([
+      expect.objectContaining({
+        entity_id: "sensor.a4_c1_38_85_3b_46_3b46_temperature",
+        device_id: "cf3fe902afc641bc3841526d92c57175",
+        device_name: "Термометр",
+        area_id: "gostinaia",
+        area_name: "Гостиная",
+      }),
+    ]);
+  });
 
   it("enriches states with device and area metadata", () => {
     const result = filterAndEnrichStates(states, config, registry, { area: "Гостиная", deviceClass: "temperature" });
@@ -117,16 +111,11 @@ describe("entity discovery", () => {
   });
 
   it("inherits an area from the device when entity area_id is null", () => {
-    const result = filterAndEnrichStates(
-      states,
-      config,
-      registry,
-      {
-        domain: "sensor",
-        deviceClass: "temperature",
-        area: "Гостиная",
-      },
-    );
+    const result = filterAndEnrichStates(states, config, registry, {
+      domain: "sensor",
+      deviceClass: "temperature",
+      area: "Гостиная",
+    });
 
     expect(result.entities).toContainEqual(
       expect.objectContaining({
@@ -156,12 +145,10 @@ describe("entity discovery", () => {
       ]),
     };
 
-    const result = filterAndEnrichStates(
-      [lightState],
-      { readableEntities: ["light.*"] },
-      lightRegistry,
-      { domain: "light", area: "Гостиная" },
-    );
+    const result = filterAndEnrichStates([lightState], { readableEntities: ["light.*"] }, lightRegistry, {
+      domain: "light",
+      area: "Гостиная",
+    });
 
     expect(result.entities[0]).toMatchObject({
       entity_id: "light.living_ceiling",
@@ -184,5 +171,61 @@ describe("entity discovery", () => {
     expect(result.count).toBe(1);
     expect(result.matched).toBe(2);
     expect(result.truncated).toBe(true);
+  });
+
+  it("keeps entities without registry area metadata usable", () => {
+    const orphan = {
+      entity_id: "sensor.orphan_temperature",
+      state: "21",
+      attributes: { device_class: "temperature" },
+    };
+    const result = filterAndEnrichStates([orphan], config, registry, {
+      domain: "sensor",
+      deviceClass: "temperature",
+    });
+    expect(result.entities).toContainEqual(
+      expect.objectContaining({
+        entity_id: "sensor.orphan_temperature",
+        device_id: null,
+        area_id: null,
+        area_name: null,
+      }),
+    );
+  });
+
+  it("composes domain, device class, and area filters", () => {
+    const mixedStates = [
+      ...states,
+      {
+        entity_id: "light.living_ceiling",
+        state: "on",
+        attributes: { device_class: "temperature" },
+      },
+      {
+        entity_id: "sensor.living_humidity",
+        state: "50",
+        attributes: { device_class: "humidity" },
+      },
+    ];
+    const mixedRegistry = {
+      ...registry,
+      entities: new Map([
+        ...registry.entities,
+        ["light.living_ceiling", { entity_id: "light.living_ceiling", device_id: "dev-living" }],
+        ["sensor.living_humidity", { entity_id: "sensor.living_humidity", device_id: "dev-living" }],
+      ]),
+    };
+
+    const result = filterAndEnrichStates(
+      mixedStates,
+      { ...config, readableEntities: ["sensor.*", "light.*"] },
+      mixedRegistry,
+      { domain: "sensor", deviceClass: "temperature", area: "living_room" },
+    );
+
+    expect(result.entities.map((entity) => entity.entity_id)).toEqual([
+      "sensor.living_temperature",
+      "sensor.override_temperature",
+    ]);
   });
 });

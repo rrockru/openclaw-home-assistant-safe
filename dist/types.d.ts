@@ -37,4 +37,3 @@ export interface RegistrySnapshot {
     devices: Map<string, DeviceRegistryEntry>;
     areas: Map<string, AreaRegistryEntry>;
 }
-//# sourceMappingURL=types.d.ts.map

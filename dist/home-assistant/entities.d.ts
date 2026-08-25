@@ -23,4 +23,3 @@ export declare function filterAndEnrichStates(states: readonly HomeAssistantStat
     truncated: boolean;
     entities: CompactEntityState[];
 };
-//# sourceMappingURL=entities.d.ts.map

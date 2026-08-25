@@ -1,5 +1,8 @@
 import { requireConfigured, webSocketUrl } from "../config.js";
 import { loadToken } from "../security.js";
+function errorReason(reason, fallback) {
+    return reason instanceof Error ? reason : new Error(fallback);
+}
 export async function haWebSocketCommands(config, commands, signal) {
     requireConfigured(config);
     signal?.throwIfAborted();
@@ -30,7 +33,7 @@ export async function haWebSocketCommands(config, commands, signal) {
                 // Best effort only.
             }
             if (error !== undefined)
-                reject(error);
+                reject(errorReason(error, "Home Assistant WebSocket request failed"));
             else
                 resolve(results);
         };
@@ -111,4 +114,3 @@ export async function haWebSocketCommands(config, commands, signal) {
             onAbort();
     });
 }
-//# sourceMappingURL=websocket-client.js.map

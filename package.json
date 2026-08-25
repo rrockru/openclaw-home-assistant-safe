@@ -2,25 +2,54 @@
   "name": "home-assistant-safe",
   "version": "0.2.0",
   "description": "Least-privilege Home Assistant tools for OpenClaw with entity-level ACLs and area-aware discovery.",
+  "keywords": [
+    "openclaw",
+    "home-assistant",
+    "plugin",
+    "smart-home",
+    "least-privilege"
+  ],
+  "author": "rrockru",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rrockru/openclaw-home-assistant-safe.git"
+  },
+  "homepage": "https://github.com/rrockru/openclaw-home-assistant-safe#readme",
+  "bugs": {
+    "url": "https://github.com/rrockru/openclaw-home-assistant-safe/issues"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "sideEffects": false,
   "files": [
     "dist",
-    "scripts",
     "openclaw.plugin.json",
-    "README.md"
+    "README.md",
+    "SECURITY.md",
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "npm run clean && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "plugin:metadata": "node ./scripts/openclaw-plugin.mjs metadata",
     "plugin:metadata:check": "node ./scripts/openclaw-plugin.mjs metadata:check",
     "plugin:build": "npm run build && npm run plugin:metadata",
     "plugin:validate": "node ./scripts/openclaw-plugin.mjs validate",
     "test": "vitest run",
-    "check": "npm run build && npm run plugin:metadata:check && npm run plugin:validate && npm test",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run build && npm run plugin:metadata:check && npm run plugin:validate",
     "prepack": "npm run check"
   },
   "dependencies": {
@@ -30,13 +59,20 @@
     "openclaw": ">=2026.5.17"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@types/node": "^24.0.0",
+    "eslint": "10.9.1",
     "openclaw": "2026.7.1-2",
+    "prettier": "3.9.6",
     "typescript": "^5.9.3",
+    "typescript-eslint": "8.68.0",
     "vitest": "^3.2.4"
   },
   "engines": {
     "node": ">=24.15.0"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "openclaw": {
     "extensions": [

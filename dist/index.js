@@ -8,4 +8,3 @@ export default defineToolPlugin({
     configSchema,
     tools: homeAssistantTools,
 });
-//# sourceMappingURL=index.js.map
