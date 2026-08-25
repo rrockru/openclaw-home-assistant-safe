@@ -25,11 +25,14 @@ export async function haWebSocketCommands<T extends readonly unknown[]>(
   signal?.throwIfAborted();
 
   const token = await loadToken(config.tokenFile);
+  signal?.throwIfAborted();
+
   const timeoutMs = config.requestTimeoutMs ?? 8000;
 
   return await new Promise<T>((resolve, reject) => {
     const socket = new WebSocket(webSocketUrl(config.url));
     const results: unknown[] = new Array(commands.length);
+    const received = new Array<boolean>(commands.length).fill(false);
     let authenticated = false;
     let settled = false;
     let nextCommandId = 1;
@@ -55,7 +58,15 @@ export async function haWebSocketCommands<T extends readonly unknown[]>(
 
     socket.addEventListener("error", () => finish(new Error("Home Assistant WebSocket connection failed")));
     socket.addEventListener("close", () => {
-      if (!settled && pending > 0) finish(new Error("Home Assistant WebSocket connection closed before all responses arrived"));
+      if (!settled) {
+        finish(
+          new Error(
+            authenticated
+            ? "Home Assistant WebSocket connection closed before all responses arrived"
+            : "Home Assistant WebSocket connection closed before authentication completed",
+          ),
+        );
+      }
     });
 
     socket.addEventListener("message", (event) => {
@@ -101,7 +112,9 @@ export async function haWebSocketCommands<T extends readonly unknown[]>(
       }
 
       const index = message.id - 1;
-      if (results[index] !== undefined) return;
+      if (received[index]) return;
+
+      received[index] = true;
       results[index] = message.result;
       pending -= 1;
       if (pending === 0) finish();

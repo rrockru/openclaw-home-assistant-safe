@@ -16,8 +16,5 @@ jobs:
         with:
           node-version: 24.15.0
       - run: npm install --ignore-scripts
-      - run: npm run build
-      - run: openclaw plugins build --root . --entry ./dist/index.js --check
-      - run: openclaw plugins validate --root . --entry ./dist/index.js
-      - run: npm test
+      - run: npm run check
       - run: npm pack --dry-run

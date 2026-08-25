@@ -11,10 +11,12 @@
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "npm run clean && tsc -p tsconfig.json",
-    "plugin:build": "npm run build && openclaw plugins build --root . --entry ./dist/index.js",
-    "plugin:validate": "npm run plugin:build && openclaw plugins validate --root . --entry ./dist/index.js",
+    "plugin:metadata": "openclaw plugins build --root . --entry ./dist/index.js",
+    "plugin:metadata:check": "openclaw plugins build --root . --entry ./dist/index.js --check",
+    "plugin:build": "npm run build && npm run plugin:metadata",
+    "plugin:validate": "openclaw plugins validate --root . --entry ./dist/index.js",
     "test": "vitest run",
-    "check": "npm run plugin:validate && npm test",
+    "check": "npm run build && npm run plugin:metadata:check && npm run plugin:validate && npm test",
     "prepack": "npm run check"
   },
   "dependencies": {

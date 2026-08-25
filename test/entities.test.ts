@@ -58,6 +58,28 @@ describe("entity discovery", () => {
     });
   });
 
+  it("inherits an area from the device when entity area_id is null", () => {
+    const result = filterAndEnrichStates(
+      states,
+      config,
+      registry,
+      {
+        domain: "sensor",
+        deviceClass: "temperature",
+        area: "Гостиная",
+      },
+    );
+
+    expect(result.entities).toContainEqual(
+      expect.objectContaining({
+        entity_id: "sensor.living_temperature",
+        device_id: "dev-living",
+        area_id: "living_room",
+        area_name: "Гостиная",
+      }),
+    );
+  });
+
   it("uses entity area before device area", () => {
     const result = filterAndEnrichStates(states, config, registry, { area: "living_room" });
     expect(result.entities.map((entity) => entity.entity_id)).toContain("sensor.override_temperature");

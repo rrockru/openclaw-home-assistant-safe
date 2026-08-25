@@ -16,19 +16,25 @@
       },
       "readableEntities": {
         "type": "array",
-        "items": { "type": "string" },
+        "items": {
+          "type": "string"
+        },
         "default": [],
         "description": "Entity IDs or simple wildcard patterns allowed for reads, for example sensor.*."
       },
       "writableEntities": {
         "type": "array",
-        "items": { "type": "string" },
+        "items": {
+          "type": "string"
+        },
         "default": [],
         "description": "Entity IDs or simple wildcard patterns allowed for turn_on/turn_off. Empty means read-only."
       },
       "blockedEntities": {
         "type": "array",
-        "items": { "type": "string" },
+        "items": {
+          "type": "string"
+        },
         "default": [],
         "description": "Entity IDs or wildcard patterns always denied. Block rules override allow rules."
       },
@@ -49,7 +55,9 @@
     },
     "additionalProperties": false
   },
-  "activation": { "onStartup": true },
+  "activation": {
+    "onStartup": true
+  },
   "contracts": {
     "tools": [
       "ha_get_state",
