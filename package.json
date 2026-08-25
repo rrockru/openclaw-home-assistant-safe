@@ -3,18 +3,22 @@
   "version": "0.2.0",
   "description": "Least-privilege Home Assistant tools for OpenClaw with entity-level ACLs and area-aware discovery.",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
   "files": [
     "dist",
+    "scripts",
     "openclaw.plugin.json",
     "README.md"
   ],
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "npm run clean && tsc -p tsconfig.json",
-    "plugin:metadata": "openclaw plugins build --root . --entry ./dist/index.js",
-    "plugin:metadata:check": "openclaw plugins build --root . --entry ./dist/index.js --check",
+    "plugin:metadata": "node ./scripts/openclaw-plugin.mjs metadata",
+    "plugin:metadata:check": "node ./scripts/openclaw-plugin.mjs metadata:check",
     "plugin:build": "npm run build && npm run plugin:metadata",
-    "plugin:validate": "openclaw plugins validate --root . --entry ./dist/index.js",
+    "plugin:validate": "node ./scripts/openclaw-plugin.mjs validate",
     "test": "vitest run",
     "check": "npm run build && npm run plugin:metadata:check && npm run plugin:validate && npm test",
     "prepack": "npm run check"

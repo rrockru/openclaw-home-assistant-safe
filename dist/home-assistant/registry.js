@@ -2,6 +2,11 @@ import { normalizeBaseUrl, requireConfigured } from "../config.js";
 import { haWebSocketCommands } from "./websocket-client.js";
 const cache = new Map();
 const refreshes = new Map();
+const REGISTRY_COMMANDS = [
+    { type: "config/entity_registry/list" },
+    { type: "config/device_registry/list" },
+    { type: "config/area_registry/list" },
+];
 function cacheKey(config) {
     return `${normalizeBaseUrl(config.url)}\n${config.tokenFile}`;
 }
@@ -9,11 +14,7 @@ function asMap(items, keyOf) {
     return new Map(items.map((item) => [keyOf(item), item]));
 }
 async function fetchRegistrySnapshot(config, signal) {
-    const [entitiesRaw, devicesRaw, areasRaw] = await haWebSocketCommands(config, [
-        { type: "config/entity_registry/list" },
-        { type: "config/device_registry/list" },
-        { type: "config/area_registry/list" },
-    ], signal);
+    const [entitiesRaw, devicesRaw, areasRaw] = await haWebSocketCommands(config, REGISTRY_COMMANDS, signal);
     return {
         entities: asMap(entitiesRaw, (entry) => entry.entity_id),
         devices: asMap(devicesRaw, (entry) => entry.id),
@@ -39,12 +40,29 @@ function waitForPromise(promise, signal) {
         });
     });
 }
-function startRegistryRefresh(key, config) {
+function startRegistryRefresh(key, config, ttlMs) {
     const existing = refreshes.get(key);
     if (existing) {
         return existing;
     }
-    const refresh = fetchRegistrySnapshot(config).finally(() => {
+    const refresh = fetchRegistrySnapshot(config)
+        .then((snapshot) => {
+        if (ttlMs > 0) {
+            cache.set(key, {
+                expiresAt: Date.now() + ttlMs,
+                snapshot,
+            });
+        }
+        else {
+            cache.delete(key);
+        }
+        return snapshot;
+    })
+        .catch((error) => {
+        cache.delete(key);
+        throw error;
+    })
+        .finally(() => {
         if (refreshes.get(key) === refresh) {
             refreshes.delete(key);
         }
@@ -62,16 +80,7 @@ export async function getRegistrySnapshot(config, signal) {
             return existing.snapshot;
         }
     }
-    const snapshot = await waitForPromise(startRegistryRefresh(key, config), signal);
-    if (ttlMs > 0) {
-        cache.set(key, {
-            expiresAt: Date.now() + ttlMs,
-            snapshot
-        });
-    }
-    else {
-        cache.delete(key);
-    }
+    const snapshot = await waitForPromise(startRegistryRefresh(key, config, ttlMs), signal);
     return snapshot;
 }
 export function clearRegistryCache() {

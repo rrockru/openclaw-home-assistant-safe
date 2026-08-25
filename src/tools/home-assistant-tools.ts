@@ -1,11 +1,12 @@
 import { Type } from "typebox";
-import type { PluginConfig } from "../types.js";
+import type { DefineToolPluginOptions } from "openclaw/plugin-sdk/tool-plugin";
+import { configSchema } from "../config.js";
 import { filterAndEnrichStates } from "../home-assistant/entities.js";
 import { getRegistrySnapshot } from "../home-assistant/registry.js";
 import { listStates } from "../home-assistant/rest-client.js";
 import { callPowerService, getState } from "../home-assistant/state.js";
 
-export function homeAssistantTools(tool: any) {
+export const homeAssistantTools: DefineToolPluginOptions<typeof configSchema>["tools"] = (tool) => {
   return [
     tool({
       name: "ha_get_state",
@@ -15,7 +16,7 @@ export function homeAssistantTools(tool: any) {
         { entity_id: Type.String({ description: "Exact Home Assistant entity_id." }) },
         { additionalProperties: false },
       ),
-      async execute({ entity_id }: { entity_id: string }, config: PluginConfig, context: { signal?: AbortSignal }) {
+      async execute({ entity_id }, config, context) {
         context.signal?.throwIfAborted();
         return await getState(config, entity_id, context.signal);
       },
@@ -42,14 +43,12 @@ export function homeAssistantTools(tool: any) {
         },
         { additionalProperties: false },
       ),
-      async execute(
-        args: { domain?: string; deviceClass?: string; area?: string; limit?: number },
-        config: PluginConfig,
-        context: { signal?: AbortSignal },
-      ) {
+      async execute(args, config, context) {
         context.signal?.throwIfAborted();
-        const states = await listStates(config, context.signal);
-        const registry = await getRegistrySnapshot(config, context.signal);
+        const [states, registry] = await Promise.all([
+          listStates(config, context.signal),
+          getRegistrySnapshot(config, context.signal),
+        ]);
         return filterAndEnrichStates(states, config, registry, args);
       },
     }),
@@ -61,7 +60,7 @@ export function homeAssistantTools(tool: any) {
         { entity_id: Type.String({ description: "Exact Home Assistant entity_id." }) },
         { additionalProperties: false },
       ),
-      async execute({ entity_id }: { entity_id: string }, config: PluginConfig, context: { signal?: AbortSignal }) {
+      async execute({ entity_id }, config, context) {
         context.signal?.throwIfAborted();
         return await callPowerService(config, entity_id, "turn_on", context.signal);
       },
@@ -74,10 +73,10 @@ export function homeAssistantTools(tool: any) {
         { entity_id: Type.String({ description: "Exact Home Assistant entity_id." }) },
         { additionalProperties: false },
       ),
-      async execute({ entity_id }: { entity_id: string }, config: PluginConfig, context: { signal?: AbortSignal }) {
+      async execute({ entity_id }, config, context) {
         context.signal?.throwIfAborted();
         return await callPowerService(config, entity_id, "turn_off", context.signal);
       },
     }),
   ];
-}
+};

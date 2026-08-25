@@ -1,6 +1,14 @@
 import { lstat, readFile } from "node:fs/promises";
 import type { PluginConfig } from "./types.js";
 
+export interface EntityAccessPolicy {
+  canRead(entityId: string): boolean;
+  canWrite(entityId: string): boolean;
+  isBlocked(entityId: string): boolean;
+}
+
+type PatternMatcher = (entityId: string) => boolean;
+
 export function patternMatches(pattern: string, entityId: string): boolean {
   if (pattern === entityId || pattern === "*") return true;
 
@@ -14,6 +22,35 @@ export function patternMatches(pattern: string, entityId: string): boolean {
 
 function matchesAny(patterns: readonly string[] | undefined, entityId: string): boolean {
   return (patterns ?? []).some((pattern) => patternMatches(pattern, entityId));
+}
+
+function compilePattern(pattern: string): PatternMatcher {
+  if (pattern === "*") return () => true;
+
+  const star = pattern.indexOf("*");
+  if (star === -1) return (entityId) => entityId === pattern;
+
+  const prefix = pattern.slice(0, star);
+  const suffix = pattern.slice(star + 1);
+  return (entityId) => entityId.startsWith(prefix) && entityId.endsWith(suffix);
+}
+
+function compilePatterns(patterns: readonly string[] | undefined): PatternMatcher {
+  const matchers = (patterns ?? []).map(compilePattern);
+  return (entityId) => matchers.some((matches) => matches(entityId));
+}
+
+export function createEntityAccessPolicy(config: PluginConfig): EntityAccessPolicy {
+  const matchesBlocked = compilePatterns(config.blockedEntities);
+  const matchesReadable = compilePatterns(config.readableEntities);
+  const matchesWritable = compilePatterns(config.writableEntities);
+
+  const isBlockedByPolicy = (entityId: string) => matchesBlocked(entityId);
+  return {
+    isBlocked: isBlockedByPolicy,
+    canRead: (entityId) => !isBlockedByPolicy(entityId) && matchesReadable(entityId),
+    canWrite: (entityId) => !isBlockedByPolicy(entityId) && matchesWritable(entityId),
+  };
 }
 
 export function isBlocked(config: PluginConfig, entityId: string): boolean {

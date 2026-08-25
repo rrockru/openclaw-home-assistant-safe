@@ -21,7 +21,9 @@ function linkedAbortController(signal, timeoutMs) {
 }
 export async function haRequest(config, path, options = {}, signal) {
     requireConfigured(config);
+    signal?.throwIfAborted();
     const token = await loadToken(config.tokenFile);
+    signal?.throwIfAborted();
     const timeoutMs = config.requestTimeoutMs ?? 8000;
     const { controller, cleanup } = linkedAbortController(signal, timeoutMs);
     try {

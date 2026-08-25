@@ -31,8 +31,10 @@ export async function haRequest<T>(
   signal?: AbortSignal,
 ): Promise<T> {
   requireConfigured(config);
+  signal?.throwIfAborted();
 
   const token = await loadToken(config.tokenFile);
+  signal?.throwIfAborted();
   const timeoutMs = config.requestTimeoutMs ?? 8000;
   const { controller, cleanup } = linkedAbortController(signal, timeoutMs);
 

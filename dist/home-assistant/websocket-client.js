@@ -20,29 +20,39 @@ export async function haWebSocketCommands(config, commands, signal) {
             settled = true;
             clearTimeout(timer);
             signal?.removeEventListener("abort", onAbort);
+            socket.removeEventListener("error", onError);
+            socket.removeEventListener("close", onClose);
+            socket.removeEventListener("message", onMessage);
             try {
                 socket.close();
             }
             catch {
                 // Best effort only.
             }
-            if (error)
+            if (error !== undefined)
                 reject(error);
             else
                 resolve(results);
         };
         const timer = setTimeout(() => finish(new Error("Home Assistant WebSocket request timed out")), timeoutMs);
         const onAbort = () => finish(signal?.reason ?? new Error("Home Assistant WebSocket request aborted"));
-        signal?.addEventListener("abort", onAbort, { once: true });
-        socket.addEventListener("error", () => finish(new Error("Home Assistant WebSocket connection failed")));
-        socket.addEventListener("close", () => {
+        const onError = () => finish(new Error("Home Assistant WebSocket connection failed"));
+        const onClose = () => {
             if (!settled) {
                 finish(new Error(authenticated
                     ? "Home Assistant WebSocket connection closed before all responses arrived"
                     : "Home Assistant WebSocket connection closed before authentication completed"));
             }
-        });
-        socket.addEventListener("message", (event) => {
+        };
+        const send = (message) => {
+            try {
+                socket.send(JSON.stringify(message));
+            }
+            catch (error) {
+                finish(error ?? new Error("Home Assistant WebSocket send failed"));
+            }
+        };
+        const onMessage = (event) => {
             let message;
             try {
                 message = JSON.parse(String(event.data));
@@ -53,7 +63,7 @@ export async function haWebSocketCommands(config, commands, signal) {
             }
             if (!authenticated) {
                 if (message.type === "auth_required") {
-                    socket.send(JSON.stringify({ type: "auth", access_token: token }));
+                    send({ type: "auth", access_token: token });
                     return;
                 }
                 if (message.type === "auth_invalid") {
@@ -69,7 +79,9 @@ export async function haWebSocketCommands(config, commands, signal) {
                 }
                 for (const command of commands) {
                     const id = nextCommandId++;
-                    socket.send(JSON.stringify({ id, ...command }));
+                    send({ ...command, id });
+                    if (settled)
+                        return;
                 }
                 return;
             }
@@ -90,7 +102,13 @@ export async function haWebSocketCommands(config, commands, signal) {
             pending -= 1;
             if (pending === 0)
                 finish();
-        });
+        };
+        signal?.addEventListener("abort", onAbort, { once: true });
+        socket.addEventListener("error", onError);
+        socket.addEventListener("close", onClose);
+        socket.addEventListener("message", onMessage);
+        if (signal?.aborted)
+            onAbort();
     });
 }
 //# sourceMappingURL=websocket-client.js.map

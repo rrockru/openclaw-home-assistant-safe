@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canRead, canWrite, patternMatches } from "../src/security.js";
+import { canRead, canWrite, createEntityAccessPolicy, patternMatches } from "../src/security.js";
 
 const config = {
   readableEntities: ["sensor.*", "light.kitchen_*"],
@@ -19,5 +19,13 @@ describe("ACL matching", () => {
     expect(canRead(config, "sensor.secret_token")).toBe(false);
     expect(canWrite(config, "light.kitchen_ceiling")).toBe(true);
     expect(canWrite(config, "light.kitchen_lock")).toBe(false);
+  });
+
+  it("compiles one reusable policy without weakening block precedence", () => {
+    const policy = createEntityAccessPolicy(config);
+    expect(policy.canRead("sensor.room_temperature")).toBe(true);
+    expect(policy.canRead("sensor.secret_token")).toBe(false);
+    expect(policy.canWrite("light.kitchen_ceiling")).toBe(true);
+    expect(policy.canWrite("light.kitchen_lock")).toBe(false);
   });
 });

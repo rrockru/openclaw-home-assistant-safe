@@ -12,6 +12,31 @@ export function patternMatches(pattern, entityId) {
 function matchesAny(patterns, entityId) {
     return (patterns ?? []).some((pattern) => patternMatches(pattern, entityId));
 }
+function compilePattern(pattern) {
+    if (pattern === "*")
+        return () => true;
+    const star = pattern.indexOf("*");
+    if (star === -1)
+        return (entityId) => entityId === pattern;
+    const prefix = pattern.slice(0, star);
+    const suffix = pattern.slice(star + 1);
+    return (entityId) => entityId.startsWith(prefix) && entityId.endsWith(suffix);
+}
+function compilePatterns(patterns) {
+    const matchers = (patterns ?? []).map(compilePattern);
+    return (entityId) => matchers.some((matches) => matches(entityId));
+}
+export function createEntityAccessPolicy(config) {
+    const matchesBlocked = compilePatterns(config.blockedEntities);
+    const matchesReadable = compilePatterns(config.readableEntities);
+    const matchesWritable = compilePatterns(config.writableEntities);
+    const isBlockedByPolicy = (entityId) => matchesBlocked(entityId);
+    return {
+        isBlocked: isBlockedByPolicy,
+        canRead: (entityId) => !isBlockedByPolicy(entityId) && matchesReadable(entityId),
+        canWrite: (entityId) => !isBlockedByPolicy(entityId) && matchesWritable(entityId),
+    };
+}
 export function isBlocked(config, entityId) {
     return matchesAny(config.blockedEntities, entityId);
 }

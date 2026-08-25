@@ -16,6 +16,12 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>();
 const refreshes = new Map<string, Promise<RegistrySnapshot>>();
 
+const REGISTRY_COMMANDS = [
+  { type: "config/entity_registry/list" },
+  { type: "config/device_registry/list" },
+  { type: "config/area_registry/list" },
+] as const;
+
 function cacheKey(config: PluginConfig & { url: string; tokenFile: string }): string {
   return `${normalizeBaseUrl(config.url)}\n${config.tokenFile}`;
 }
@@ -31,11 +37,7 @@ async function fetchRegistrySnapshot(config: PluginConfig, signal?: AbortSignal)
     AreaRegistryEntry[],
   ]>(
     config,
-    [
-      { type: "config/entity_registry/list" },
-      { type: "config/device_registry/list" },
-      { type: "config/area_registry/list" },
-    ],
+    REGISTRY_COMMANDS,
     signal,
   );
 
@@ -79,17 +81,34 @@ function waitForPromise<T>(
 function startRegistryRefresh(
   key: string,
   config: PluginConfig,
+  ttlMs: number,
 ): Promise<RegistrySnapshot> {
   const existing = refreshes.get(key);
   if (existing) {
     return existing;
   }
 
-  const refresh = fetchRegistrySnapshot(config).finally(() => {
-    if (refreshes.get(key) === refresh) {
-      refreshes.delete(key);
-    }
-  });
+  const refresh = fetchRegistrySnapshot(config)
+    .then((snapshot) => {
+      if (ttlMs > 0) {
+        cache.set(key, {
+          expiresAt: Date.now() + ttlMs,
+          snapshot,
+        });
+      } else {
+        cache.delete(key);
+      }
+      return snapshot;
+    })
+    .catch((error: unknown) => {
+      cache.delete(key);
+      throw error;
+    })
+    .finally(() => {
+      if (refreshes.get(key) === refresh) {
+        refreshes.delete(key);
+      }
+    });
 
   refreshes.set(key, refresh);
   return refresh;
@@ -108,17 +127,9 @@ export async function getRegistrySnapshot(config: PluginConfig, signal?: AbortSi
   }
 
   const snapshot = await waitForPromise(
-    startRegistryRefresh(key, config),
+    startRegistryRefresh(key, config, ttlMs),
     signal,
   );
-
-  if (ttlMs > 0) {
-    cache.set(key, {
-      expiresAt: Date.now() + ttlMs,
-      snapshot });
-  } else {
-    cache.delete(key);
-  }
   return snapshot;
 }
 

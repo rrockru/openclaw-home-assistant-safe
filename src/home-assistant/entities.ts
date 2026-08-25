@@ -1,4 +1,4 @@
-import { canRead } from "../security.js";
+import { createEntityAccessPolicy } from "../security.js";
 import type {
   AreaRegistryEntry,
   DeviceRegistryEntry,
@@ -34,37 +34,71 @@ function stringAttribute(state: HomeAssistantState, key: string): string | null 
 }
 
 function normalize(value: string): string {
-  return value.trim().toLocaleLowerCase();
+  return value.trim().toLowerCase();
 }
 
-function resolveArea(
+interface ResolvedEntityContext {
+  entity: EntityRegistryEntry | undefined;
+  device: DeviceRegistryEntry | undefined;
+  area: AreaRegistryEntry | undefined;
+  effectiveAreaId: string | null;
+}
+
+function resolveEffectiveAreaId(
   entity: EntityRegistryEntry | undefined,
   device: DeviceRegistryEntry | undefined,
-  registry: RegistrySnapshot,
-): AreaRegistryEntry | undefined {
-  const areaId = entity?.area_id ?? device?.area_id ?? null;
-  return areaId ? registry.areas.get(areaId) : undefined;
+): string | null {
+  return entity?.area_id ?? device?.area_id ?? null;
 }
 
-function areaMatches(area: AreaRegistryEntry | undefined, query: string | undefined): boolean {
-  if (!query) return true;
-  if (!area) return false;
+function resolveEntityContext(
+  entityId: string,
+  registry: RegistrySnapshot,
+): ResolvedEntityContext {
+  const entity = registry.entities.get(entityId);
+  const device = entity?.device_id ? registry.devices.get(entity.device_id) : undefined;
+  const effectiveAreaId = resolveEffectiveAreaId(entity, device);
+
+  return {
+    entity,
+    device,
+    effectiveAreaId,
+    area: effectiveAreaId ? registry.areas.get(effectiveAreaId) : undefined,
+  };
+}
+
+function matchingAreaIds(
+  registry: RegistrySnapshot,
+  query: string | undefined,
+): ReadonlySet<string> | undefined {
+  if (query === undefined || query.length === 0) return undefined;
 
   const needle = normalize(query);
-  if (normalize(area.area_id) === needle || normalize(area.name) === needle) return true;
-  return (area.aliases ?? []).some((alias) => normalize(alias) === needle);
+  const matchingIds = new Set<string>();
+  for (const area of registry.areas.values()) {
+    if (
+      normalize(area.area_id) === needle
+      || normalize(area.name) === needle
+      || (area.aliases ?? []).some((alias) => normalize(alias) === needle)
+    ) {
+      matchingIds.add(area.area_id);
+    }
+  }
+  return matchingIds;
 }
 
-function compactState(state: HomeAssistantState, registry: RegistrySnapshot): CompactEntityState {
-  const entity = registry.entities.get(state.entity_id);
-  const device = entity?.device_id ? registry.devices.get(entity.device_id) : undefined;
-  const area = resolveArea(entity, device, registry);
+function compactState(
+  state: HomeAssistantState,
+  context: ResolvedEntityContext,
+  deviceClass: string | null,
+): CompactEntityState {
+  const { entity, device, area } = context;
 
   return {
     entity_id: state.entity_id,
     state: state.state,
     friendly_name: stringAttribute(state, "friendly_name") ?? entity?.name ?? entity?.original_name ?? null,
-    device_class: stringAttribute(state, "device_class"),
+    device_class: deviceClass,
     unit_of_measurement: stringAttribute(state, "unit_of_measurement"),
     device_id: device?.id ?? null,
     device_name: device?.name_by_user ?? device?.name ?? null,
@@ -80,26 +114,34 @@ export function filterAndEnrichStates(
   registry: RegistrySnapshot,
   filters: EntityListFilters,
 ): { count: number; matched: number; truncated: boolean; entities: CompactEntityState[] } {
-  const domain = filters.domain?.trim().toLocaleLowerCase();
-  const deviceClass = filters.deviceClass?.trim().toLocaleLowerCase();
+  const domain = filters.domain === undefined ? undefined : normalize(filters.domain);
+  const deviceClass = filters.deviceClass === undefined ? undefined : normalize(filters.deviceClass);
+  const areaIds = matchingAreaIds(registry, filters.area);
   const limit = filters.limit ?? 200;
+  const access = createEntityAccessPolicy(config);
+  const entities: CompactEntityState[] = [];
+  let matched = 0;
 
-  const matched = states
-    .filter((state) => canRead(config, state.entity_id))
-    .filter((state) => !domain || state.entity_id.toLocaleLowerCase().startsWith(`${domain}.`))
-    .map((state) => compactState(state, registry))
-    .filter((state) => !deviceClass || state.device_class?.toLocaleLowerCase() === deviceClass)
-    .filter((state) => {
-      if (!filters.area) return true;
-      const area = state.area_id ? registry.areas.get(state.area_id) : undefined;
-      return areaMatches(area, filters.area);
-    });
+  for (const state of states) {
+    if (!access.canRead(state.entity_id)) continue;
+    if (domain && !state.entity_id.toLowerCase().startsWith(`${domain}.`)) continue;
 
-  const entities = matched.slice(0, limit);
+    const stateDeviceClass = stringAttribute(state, "device_class");
+    if (deviceClass && (!stateDeviceClass || normalize(stateDeviceClass) !== deviceClass)) continue;
+
+    const context = resolveEntityContext(state.entity_id, registry);
+    if (areaIds && (!context.effectiveAreaId || !areaIds.has(context.effectiveAreaId))) continue;
+
+    matched += 1;
+    if (entities.length < limit) {
+      entities.push(compactState(state, context, stateDeviceClass));
+    }
+  }
+
   return {
     count: entities.length,
-    matched: matched.length,
-    truncated: matched.length > entities.length,
+    matched,
+    truncated: matched > entities.length,
     entities,
   };
 }

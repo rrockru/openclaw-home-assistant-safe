@@ -3,7 +3,7 @@ import { filterAndEnrichStates } from "../home-assistant/entities.js";
 import { getRegistrySnapshot } from "../home-assistant/registry.js";
 import { listStates } from "../home-assistant/rest-client.js";
 import { callPowerService, getState } from "../home-assistant/state.js";
-export function homeAssistantTools(tool) {
+export const homeAssistantTools = (tool) => {
     return [
         tool({
             name: "ha_get_state",
@@ -29,8 +29,10 @@ export function homeAssistantTools(tool) {
             }, { additionalProperties: false }),
             async execute(args, config, context) {
                 context.signal?.throwIfAborted();
-                const states = await listStates(config, context.signal);
-                const registry = await getRegistrySnapshot(config, context.signal);
+                const [states, registry] = await Promise.all([
+                    listStates(config, context.signal),
+                    getRegistrySnapshot(config, context.signal),
+                ]);
                 return filterAndEnrichStates(states, config, registry, args);
             },
         }),
@@ -55,5 +57,5 @@ export function homeAssistantTools(tool) {
             },
         }),
     ];
-}
+};
 //# sourceMappingURL=home-assistant-tools.js.map
